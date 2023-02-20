@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from botNet import BoTStack
 
 class EMA:
     def __init__(self, beta):
@@ -37,7 +37,8 @@ class SelfAttention(nn.Module):
         super(SelfAttention, self).__init__()
         self.channels = channels
         self.size = size
-        self.mha = nn.MultiheadAttention(channels, 4, batch_first=True)
+        self.mha = nn.MultiheadAttention(channels, 4)
+        # self.mha = nn.MultiheadAttention(channels, 4, batch_first=True)
         self.ln = nn.LayerNorm([channels])
         self.ff_self = nn.Sequential(
             nn.LayerNorm([channels]),
@@ -96,6 +97,8 @@ class Down(nn.Module):
     def forward(self, x, t):
         x = self.maxpool_conv(x)
         emb = self.emb_layer(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1])
+        # print('x shape',x.shape)
+        # print('emb shape',emb.shape)
         return x + emb
 
 
@@ -126,10 +129,11 @@ class Up(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, c_in=3, c_out=3, time_dim=256, device="cuda"):
+    def __init__(self, c_in=3, c_out=3, img_size = 64, time_dim=256, device="cuda"):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
+        self.fmap = int(img_size//8)
         self.inc = DoubleConv(c_in, 64)
         self.down1 = Down(64, 128)
         self.sa1 = SelfAttention(128, 32)
@@ -140,6 +144,7 @@ class UNet(nn.Module):
 
         self.bot1 = DoubleConv(256, 512)
         self.bot2 = DoubleConv(512, 512)
+        self.bottleneck_layer = BoTStack(dim=512, fmap_size=(self.fmap, self.fmap),dim_out=512, stride=1, rel_pos_emb=True)
         self.bot3 = DoubleConv(512, 256)
 
         self.up1 = Up(512, 128)
@@ -174,6 +179,7 @@ class UNet(nn.Module):
 
         x4 = self.bot1(x4)
         x4 = self.bot2(x4)
+        x4 = self.bottleneck_layer(x4)
         x4 = self.bot3(x4)
 
         x = self.up1(x4, x3, t)

@@ -6,6 +6,7 @@ from tqdm import tqdm
 from torch import optim
 from utils import *
 from modules import UNet
+from UBotNet import UBotNetModel
 import logging
 from torch.utils.tensorboard import SummaryWriter
 
@@ -62,8 +63,10 @@ def train(args):
     setup_logging(args.run_name)
     device = args.device
     dataloader = get_data(args)
+    # model = UBotNetModel(base_depth=128,img_size=64).to(device)
     model = UNet().to(device)
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    # optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer= torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=1e-5)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
     logger = SummaryWriter(os.path.join("runs", args.run_name))
@@ -96,12 +99,12 @@ def launch():
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
     args.run_name = "DDPM_Uncondtional"
-    args.epochs = 500
-    args.batch_size = 12
+    args.epochs = 1000
+    args.batch_size = 32
     args.image_size = 64
-    args.dataset_path = r"C:\Users\dome\datasets\landscape_img_folder"
+    args.dataset_path = "dataset"
     args.device = "cuda"
-    args.lr = 3e-4
+    args.lr = 1e-4
     train(args)
 
 
